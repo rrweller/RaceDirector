@@ -1,0 +1,24 @@
+{
+  "domElement": "<race-director-config></race-director-config>",
+  "name": "RaceDirector Setup",
+  "appName": "RaceDirectorConfig",
+  "types": [
+    "ui.apps.categories.racing"
+  ],
+  "author": "Codex",
+  "version": "0.3",
+  "description": "Configuration window for the RaceDirector camera system.",
+  "directive": "raceDirectorConfig",
+  "category": "Gameplay",
+  "css": {
+    "width": "900px",
+    "height": "720px",
+    "top": "160px",
+    "left": "900px",
+    "min-width": "680px",
+    "min-height": "520px"
+  },
+  "isAuxiliary": true,
+  "interactive": "required",
+  "preserveAspectRatio": false
+}

@@ -1,0 +1,811 @@
+.bngApp.race-director-config,
+.race-director-config {
+  --rdc-bg-top: rgba(24, 26, 32, 0.94);
+  --rdc-bg-mid: rgba(16, 18, 24, 0.94);
+  --rdc-bg-low: rgba(11, 13, 18, 0.94);
+  --rdc-panel-top: rgba(20, 22, 28, 0.98);
+  --rdc-panel-bottom: rgba(12, 14, 19, 0.98);
+  --rdc-surface: rgba(255, 255, 255, 0.05);
+  --rdc-border: rgba(255, 255, 255, 0.10);
+  --rdc-soft: rgba(255, 255, 255, 0.66);
+  --rdc-hard: #f3f4f7;
+  --rdc-accent-rgb: 128, 154, 182;
+  --rdc-accent-deep-rgb: 82, 104, 129;
+  --rdc-blue-rgb: 86, 156, 231;
+  --rdc-green-rgb: 100, 208, 132;
+  --rdc-danger-rgb: 239, 74, 74;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0 !important;
+  box-sizing: border-box;
+  color: var(--rdc-hard);
+  font-family: "Bahnschrift Condensed", "Arial Narrow", "Segoe UI", sans-serif;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  overflow: visible;
+}
+
+.race-director-config .viewport {
+  width: calc(100% - 10px);
+  height: calc(100% - 10px);
+  margin: 5px;
+  overflow: visible;
+}
+
+.race-director-config .scale-wrap {
+  width: 100%;
+  height: 100%;
+  transform-origin: top left;
+  transition: transform 180ms ease, width 180ms ease, height 180ms ease;
+  will-change: transform;
+}
+
+.race-director-config .config-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 20px;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 18%),
+    linear-gradient(180deg, var(--rdc-bg-low) 0%, var(--rdc-bg-mid) 18%, var(--rdc-bg-top) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+.race-director-config .config-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.14), transparent 26%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 30%);
+  opacity: 0.9;
+}
+
+.race-director-config .config-header,
+.race-director-config .toolbar-strip,
+.race-director-config .message-strip,
+.race-director-config .config-tabs,
+.race-director-config .config-body {
+  position: relative;
+  z-index: 1;
+}
+
+.race-director-config .config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent),
+    linear-gradient(90deg, rgba(var(--rdc-accent-rgb), 0.10), transparent 44%);
+}
+
+.race-director-config .config-title {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.race-director-config .config-subtitle {
+  margin-top: 4px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--rdc-soft);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+.race-director-config .config-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.race-director-config .config-drag-zone {
+  min-width: 0;
+  flex: 1;
+  cursor: move;
+  user-select: none;
+}
+
+.race-director-config .header-chip,
+.race-director-config .toolbar-summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.race-director-config .header-chip.is-live {
+  background: linear-gradient(90deg, rgba(var(--rdc-green-rgb), 0.22), rgba(255, 255, 255, 0.05));
+  border-color: rgba(var(--rdc-green-rgb), 0.32);
+  color: #ffffff;
+}
+
+.race-director-config .toolbar-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 0 14px;
+  flex-wrap: wrap;
+}
+
+.race-director-config .message-strip {
+  margin: 10px 14px 0 14px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.race-director-config .message-strip.is-warning {
+  background: rgba(var(--rdc-blue-rgb), 0.16);
+}
+
+.race-director-config button {
+  border: 0;
+  cursor: pointer;
+  color: #ffffff;
+  font-family: inherit;
+  transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+}
+
+.race-director-config button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.race-director-config button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.race-director-config .close-button,
+.race-director-config .toolbar-button,
+.race-director-config .config-tab,
+.race-director-config .small-button,
+.race-director-config .stepper-button {
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.race-director-config .close-button,
+.race-director-config .config-tab,
+.race-director-config .small-button {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+.race-director-config .toolbar-button {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.race-director-config .toolbar-button-primary,
+.race-director-config .config-tab.is-active,
+.race-director-config .stepper-button,
+.race-director-config .small-button.is-active {
+  background: linear-gradient(180deg, rgba(var(--rdc-accent-rgb), 0.34), rgba(var(--rdc-accent-deep-rgb), 0.16));
+  box-shadow: inset 0 0 0 1px rgba(var(--rdc-accent-rgb), 0.26);
+}
+
+.race-director-config .config-tabs {
+  display: flex;
+  gap: 5px;
+  padding: 10px 14px 0 14px;
+  flex-wrap: wrap;
+}
+
+.race-director-config .config-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 14px 14px 14px;
+}
+
+.race-director-config .window-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 30px;
+  height: 30px;
+  cursor: nwse-resize;
+  z-index: 2;
+}
+
+.race-director-config .window-resize-handle::before {
+  content: "";
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 12px;
+  height: 12px;
+  border-right: 2px solid rgba(255, 255, 255, 0.42);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.42);
+  transform: rotate(0deg);
+}
+
+.race-director-config .config-body::-webkit-scrollbar,
+.race-director-config .live-table::-webkit-scrollbar {
+  width: 5px;
+}
+
+.race-director-config .config-body::-webkit-scrollbar-thumb,
+.race-director-config .live-table::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.race-director-config .config-grid,
+.race-director-config .status-grid,
+.race-director-config .mini-stats,
+.race-director-config .sequence-list {
+  display: grid;
+  gap: 10px;
+}
+
+.race-director-config .compact-gap {
+  margin-bottom: 10px;
+}
+
+.race-director-config .config-grid-two {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.race-director-config .status-grid-four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.race-director-config .mini-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.race-director-config .field-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: start;
+}
+
+.race-director-config .field-block {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.race-director-config .field-block.is-narrow {
+  flex: 0 0 auto;
+}
+
+.race-director-config .field-block.is-choice {
+  flex: 0 1 250px;
+  min-width: 250px;
+  max-width: 320px;
+}
+
+.race-director-config .config-card,
+.race-director-config .entry-card,
+.race-director-config .value-card,
+.race-director-config .empty-card,
+.race-director-config .sequence-row,
+.race-director-config .mini-stat {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 18%),
+    linear-gradient(180deg, var(--rdc-panel-top), var(--rdc-panel-bottom));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.race-director-config .config-card,
+.race-director-config .entry-card,
+.race-director-config .empty-card,
+.race-director-config .value-card,
+.race-director-config .mini-stat,
+.race-director-config .sequence-row {
+  border-radius: 16px;
+}
+
+.race-director-config .config-card,
+.race-director-config .entry-card,
+.race-director-config .empty-card {
+  padding: 12px;
+}
+
+.race-director-config .value-card,
+.race-director-config .mini-stat,
+.race-director-config .sequence-row {
+  padding: 10px;
+}
+
+.race-director-config .section-title,
+.race-director-config .field-label,
+.race-director-config .form-label,
+.race-director-config .value-label,
+.race-director-config .mini-label {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.race-director-config .section-copy,
+.race-director-config .field-hint,
+.race-director-config .form-hint,
+.race-director-config .entry-summary,
+.race-director-config .saved-meta,
+.race-director-config .empty-copy,
+.race-director-config .sequence-copy,
+.race-director-config .guide-copy {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--rdc-soft);
+}
+
+.race-director-config .value-text,
+.race-director-config .mini-value,
+.race-director-config .empty-title,
+.race-director-config .sequence-name,
+.race-director-config .live-name {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.12;
+  font-weight: 800;
+}
+
+.race-director-config .value-card-toggle .toggle-inline {
+  margin-top: 10px;
+}
+
+.race-director-config .overview-toggle {
+  font-size: 11px;
+  letter-spacing: 0.10em;
+}
+
+.race-director-config .form-block + .mini-stats {
+  margin-top: 12px;
+}
+
+.race-director-config .text-input,
+.race-director-config .number-input,
+.race-director-config .select-input,
+.race-director-config .entry-name-input,
+.race-director-config .stepper-input {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.race-director-config .field-block.is-narrow .number-input,
+.race-director-config .field-block.is-narrow .text-input {
+  width: 124px;
+  min-width: 124px;
+  max-width: 124px;
+}
+
+.race-director-config .text-input:focus,
+.race-director-config .number-input:focus,
+.race-director-config .select-input:focus,
+.race-director-config .entry-name-input:focus,
+.race-director-config .stepper-input:focus {
+  border-color: rgba(var(--rdc-accent-rgb), 0.42);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 0 0 1px rgba(var(--rdc-accent-rgb), 0.16);
+}
+
+.race-director-config .entry-card {
+  margin-top: 10px;
+}
+
+.race-director-config .entry-card.is-collapsed {
+  padding-bottom: 10px;
+}
+
+.race-director-config .entry-card.is-disabled,
+.race-director-config .sequence-row.is-disabled {
+  opacity: 0.58;
+}
+
+.race-director-config .entry-top,
+.race-director-config .sequence-row,
+.race-director-config .config-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.race-director-config .entry-order,
+.race-director-config .sequence-index,
+.race-director-config .live-pos {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.race-director-config .entry-head,
+.race-director-config .sequence-main,
+.race-director-config .config-copy-block {
+  min-width: 0;
+  flex: 1;
+}
+
+.race-director-config .entry-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.race-director-config .entry-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.race-director-config .entry-collapse {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.76);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.race-director-config .entry-collapse:hover,
+.race-director-config .entry-collapse:focus {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.race-director-config .entry-collapse-glyph {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 900;
+  transform: rotate(90deg);
+  transition: transform 140ms ease;
+}
+
+.race-director-config .entry-collapse.is-collapsed .entry-collapse-glyph {
+  transform: rotate(0deg);
+}
+
+.race-director-config .option-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  outline: none;
+}
+
+.race-director-config .field-block.is-choice .option-group {
+  display: flex;
+  width: 100%;
+}
+
+.race-director-config .option-group:focus {
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--rdc-accent-rgb), 0.26),
+    0 0 0 1px rgba(var(--rdc-accent-rgb), 0.16);
+}
+
+.race-director-config .option-button {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 9px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: none;
+}
+
+.race-director-config .option-button.is-active {
+  background: linear-gradient(180deg, rgba(var(--rdc-accent-rgb), 0.34), rgba(var(--rdc-accent-deep-rgb), 0.16));
+  box-shadow: inset 0 0 0 1px rgba(var(--rdc-accent-rgb), 0.26);
+  color: #ffffff;
+}
+
+.race-director-config .type-chip {
+  min-width: 72px;
+  padding: 6px 9px 5px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.race-director-config .type-chip.is-trackside {
+  background: linear-gradient(180deg, rgba(var(--rdc-accent-rgb), 0.28), rgba(var(--rdc-accent-rgb), 0.12));
+}
+
+.race-director-config .type-chip.is-onboard {
+  background: linear-gradient(180deg, rgba(var(--rdc-blue-rgb), 0.28), rgba(var(--rdc-blue-rgb), 0.12));
+}
+
+.race-director-config .toggle-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.race-director-config .toggle-inline input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: rgb(var(--rdc-accent-rgb));
+}
+
+.race-director-config .saved-meta,
+.race-director-config .entry-actions,
+.race-director-config .sequence-actions {
+  margin-top: 0;
+}
+
+.race-director-config .entry-body {
+  margin-top: 10px;
+}
+
+.race-director-config .entry-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.race-director-config .entry-actions,
+.race-director-config .sequence-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.race-director-config .small-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 10px;
+}
+
+.race-director-config .small-button.is-danger {
+  background: linear-gradient(180deg, rgba(var(--rdc-danger-rgb), 0.30), rgba(var(--rdc-danger-rgb), 0.12));
+}
+
+.race-director-config .sequence-row.is-active,
+.race-director-config .live-row.is-reference {
+  border-color: rgba(var(--rdc-accent-rgb), 0.20);
+  background:
+    linear-gradient(90deg, rgba(var(--rdc-accent-rgb), 0.16), transparent 38%),
+    linear-gradient(180deg, rgba(29, 33, 38, 0.98), rgba(18, 21, 26, 0.96));
+}
+
+.race-director-config .live-table {
+  max-height: 360px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin-top: 10px;
+}
+
+.race-director-config .live-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.race-director-config .live-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.race-director-config .live-row.is-focus {
+  box-shadow: inset 0 0 0 1px rgba(var(--rdc-blue-rgb), 0.22);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(var(--rdc-blue-rgb), 0.06);
+}
+
+.race-director-config .live-pill {
+  min-width: 56px;
+  padding: 5px 7px 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.race-director-config .guide-card .section-copy {
+  margin-bottom: 10px;
+}
+
+.race-director-config .guide-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.race-director-config .guide-step + .guide-step {
+  margin-top: 10px;
+}
+
+.race-director-config .guide-index {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(var(--rdc-accent-rgb), 0.36), rgba(var(--rdc-accent-deep-rgb), 0.16));
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.race-director-config .guide-title {
+  font-size: 13px;
+  line-height: 1.1;
+  font-weight: 800;
+}
+
+.race-director-config .display-card + .display-card {
+  margin-top: 10px;
+}
+
+.race-director-config .config-row {
+  justify-content: space-between;
+}
+
+.race-director-config .stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.race-director-config .stepper-button {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.race-director-config .stepper-input {
+  width: 66px;
+  min-width: 66px;
+  max-width: 66px;
+  min-height: 28px;
+  height: 28px;
+  padding: 6px 8px 4px;
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+
+.race-director-config .stepper-input::-webkit-outer-spin-button,
+.race-director-config .stepper-input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+@media (max-width: 860px) {
+  .race-director-config .config-grid-two,
+  .race-director-config .status-grid-four {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .race-director-config .config-header,
+  .race-director-config .entry-top,
+  .race-director-config .sequence-row,
+  .race-director-config .config-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .race-director-config .entry-line,
+  .race-director-config .toolbar-strip {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .race-director-config .field-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-director-config .field-block,
+  .race-director-config .field-block.is-choice {
+    min-width: 0;
+    max-width: none;
+  }
+
+  .race-director-config .field-block.is-narrow .number-input,
+  .race-director-config .field-block.is-narrow .text-input {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .race-director-config .entry-controls,
+  .race-director-config .config-header-actions,
+  .race-director-config .toggle-inline {
+    justify-content: flex-start;
+  }
+}

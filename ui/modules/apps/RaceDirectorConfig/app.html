@@ -1,0 +1,445 @@
+<div class="bngApp race-director-config">
+  <div class="viewport">
+    <div class="scale-wrap" ng-style="raceDirectorConfig.scaleStyle()">
+      <div class="config-shell">
+        <div class="config-header">
+          <div
+            class="config-heading config-drag-zone"
+            ng-mousedown="raceDirectorConfig.startDrag($event)">
+            <div class="config-title">Race Director Setup</div>
+            <div class="config-subtitle">{{ raceDirectorConfig.state.mapLabel || 'Unknown Map' }} | {{ raceDirectorConfig.state.config.presetName || 'Default TV Coverage' }}</div>
+          </div>
+
+          <div class="config-header-actions" ng-mousedown="$event.stopPropagation()">
+            <div class="header-chip" ng-class="{ 'is-live': raceDirectorConfig.state.runtime.playing }">
+              {{ raceDirectorConfig.state.runtime.playing ? 'Live' : 'Paused' }}
+            </div>
+            <button
+              type="button"
+              class="close-button"
+              ng-click="raceDirectorConfig.closeWindow()">
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div class="toolbar-strip">
+          <button type="button" class="toolbar-button toolbar-button-primary" ng-click="raceDirectorConfig.captureTracksideCamera()">Save trackside</button>
+          <button type="button" class="toolbar-button" ng-click="raceDirectorConfig.addOnboardEntry()">Add onboard shot</button>
+          <div class="toolbar-summary">{{ raceDirectorConfig.entryCount() }} shots | {{ raceDirectorConfig.tracksideCount() }} trackside | {{ raceDirectorConfig.onboardCount() }} onboard</div>
+        </div>
+
+        <div class="message-strip" ng-if="raceDirectorConfig.state.runtime.message">
+          {{ raceDirectorConfig.state.runtime.message }}
+        </div>
+        <div class="message-strip is-warning" ng-if="raceDirectorConfig.state.runtime.pausedReason">
+          {{ raceDirectorConfig.state.runtime.pausedReason }}
+        </div>
+
+        <div class="config-tabs">
+          <button
+            type="button"
+            class="config-tab"
+            ng-class="{ 'is-active': raceDirectorConfig.ui.tab === 'overview' }"
+            ng-click="raceDirectorConfig.setTab('overview')">
+            Overview
+          </button>
+          <button
+            type="button"
+            class="config-tab"
+            ng-class="{ 'is-active': raceDirectorConfig.ui.tab === 'shots' }"
+            ng-click="raceDirectorConfig.setTab('shots')">
+            Shots
+          </button>
+          <button
+            type="button"
+            class="config-tab"
+            ng-class="{ 'is-active': raceDirectorConfig.ui.tab === 'sequence' }"
+            ng-click="raceDirectorConfig.setTab('sequence')">
+            Sequence
+          </button>
+          <button
+            type="button"
+            class="config-tab"
+            ng-class="{ 'is-active': raceDirectorConfig.ui.tab === 'live' }"
+            ng-click="raceDirectorConfig.setTab('live')">
+            Live
+          </button>
+          <button
+            type="button"
+            class="config-tab"
+            ng-class="{ 'is-active': raceDirectorConfig.ui.tab === 'display' }"
+            ng-click="raceDirectorConfig.setTab('display')">
+            Display
+          </button>
+        </div>
+
+        <div class="config-body" ng-switch="raceDirectorConfig.ui.tab">
+          <div ng-switch-when="overview">
+            <div class="status-grid status-grid-four compact-gap">
+              <div class="value-card">
+                <div class="value-label">Current</div>
+                <div class="value-text">{{ raceDirectorConfig.activeShotLabel() }}</div>
+              </div>
+              <div class="value-card">
+                <div class="value-label">Next</div>
+                <div class="value-text">{{ raceDirectorConfig.nextShotLabel() }}</div>
+              </div>
+              <div class="value-card">
+                <div class="value-label">Reference Car</div>
+                <div class="value-text">{{ raceDirectorConfig.referenceLabel() }}</div>
+              </div>
+              <div class="value-card value-card-toggle">
+                <div class="value-label">Loop Sequence</div>
+                <label class="toggle-inline overview-toggle">
+                  <input
+                    type="checkbox"
+                    ng-model="raceDirectorConfig.state.config.settings.loopSequence"
+                    ng-change="raceDirectorConfig.persistConfig()">
+                  <span>{{ raceDirectorConfig.loopSequenceEnabled() ? 'Enabled' : 'Disabled' }}</span>
+                </label>
+                <div class="field-hint">Last shot returns to the first shot.</div>
+              </div>
+            </div>
+
+            <div class="config-grid config-grid-two">
+              <div class="config-card">
+                <div class="section-title">Preset</div>
+                <div class="section-copy">This preset is stored per map and updates automatically as you edit it.</div>
+
+                <div class="form-block">
+                  <label class="form-label" for="raceDirectorPresetName">Preset name</label>
+                  <input
+                    id="raceDirectorPresetName"
+                    type="text"
+                    class="text-input"
+                    maxlength="32"
+                    ng-model="raceDirectorConfig.state.config.presetName"
+                    ng-model-options="{ debounce: 150 }"
+                    ng-change="raceDirectorConfig.persistConfig()">
+                </div>
+
+                <div class="mini-stats">
+                  <div class="mini-stat">
+                    <div class="mini-label">Shots</div>
+                    <div class="mini-value">{{ raceDirectorConfig.entryCount() }}</div>
+                  </div>
+                  <div class="mini-stat">
+                    <div class="mini-label">Trackside</div>
+                    <div class="mini-value">{{ raceDirectorConfig.tracksideCount() }}</div>
+                  </div>
+                  <div class="mini-stat">
+                    <div class="mini-label">Onboard</div>
+                    <div class="mini-value">{{ raceDirectorConfig.onboardCount() }}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="config-card guide-card">
+                <div class="section-title">Quick Start</div>
+                <div class="section-copy">Use this flow once per lap, then drive everything from the runtime bar.</div>
+
+                <div class="guide-step">
+                  <div class="guide-index">1</div>
+                  <div class="guide-copy-wrap">
+                    <div class="guide-title">Frame a trackside shot</div>
+                    <div class="guide-copy">Go to BeamNG freecam and move to the angle you want to save.</div>
+                  </div>
+                </div>
+
+                <div class="guide-step">
+                  <div class="guide-index">2</div>
+                  <div class="guide-copy-wrap">
+                    <div class="guide-title">Save that camera</div>
+                    <div class="guide-copy">Use <strong>Save trackside from freecam</strong> to capture the transform.</div>
+                  </div>
+                </div>
+
+                <div class="guide-step">
+                  <div class="guide-index">3</div>
+                  <div class="guide-copy-wrap">
+                    <div class="guide-title">Insert onboard shots</div>
+                    <div class="guide-copy">Add onboard cuts for race position coverage or a specific car.</div>
+                  </div>
+                </div>
+
+                <div class="guide-step">
+                  <div class="guide-index">4</div>
+                  <div class="guide-copy-wrap">
+                    <div class="guide-title">Arrange the lap order</div>
+                    <div class="guide-copy">The Sequence tab controls the order the director runs through.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div ng-switch-when="shots">
+            <div class="empty-card" ng-if="!raceDirectorConfig.entryCount()">
+              <div class="empty-title">No shots saved yet</div>
+              <div class="empty-copy">Create a trackside shot from freecam or add an onboard shot to start building the director sequence.</div>
+            </div>
+
+            <div
+              class="entry-card"
+              ng-repeat="entry in raceDirectorConfig.state.config.entries track by entry.id"
+              ng-class="{ 'is-disabled': !entry.enabled, 'is-collapsed': raceDirectorConfig.isEntryCollapsed(entry) }">
+              <div class="entry-top">
+                <div class="entry-order">{{ $index + 1 }}</div>
+
+                <div class="entry-head">
+                  <div class="entry-line">
+                    <div class="type-chip" ng-class="{ 'is-trackside': entry.type === 'trackside', 'is-onboard': entry.type === 'onboard' }">
+                      {{ entry.type === 'trackside' ? 'Trackside' : 'Onboard' }}
+                    </div>
+                    <input
+                      type="text"
+                      class="entry-name-input"
+                      maxlength="28"
+                      ng-model="entry.name"
+                      ng-model-options="{ debounce: 150 }"
+                      ng-change="raceDirectorConfig.persistConfig()">
+                  </div>
+                  <div class="entry-summary">{{ raceDirectorConfig.entryMetaLine(entry) }}</div>
+                </div>
+
+                <div class="entry-controls">
+                  <button
+                    type="button"
+                    class="entry-collapse"
+                    ng-class="{ 'is-collapsed': raceDirectorConfig.isEntryCollapsed(entry) }"
+                    ng-click="raceDirectorConfig.toggleEntryCollapsed(entry)"
+                    ng-attr-title="{{ raceDirectorConfig.isEntryCollapsed(entry) ? 'Expand shot' : 'Collapse shot' }}"
+                    ng-attr-aria-label="{{ raceDirectorConfig.isEntryCollapsed(entry) ? 'Expand shot' : 'Collapse shot' }}">
+                    <span class="entry-collapse-glyph">&gt;</span>
+                  </button>
+
+                  <label class="toggle-inline">
+                    <input
+                      type="checkbox"
+                      ng-model="entry.enabled"
+                      ng-change="raceDirectorConfig.persistConfig()">
+                    <span>Enabled</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="entry-body" ng-if="!raceDirectorConfig.isEntryCollapsed(entry)">
+                <div class="field-grid">
+                  <div class="field-block is-narrow">
+                    <div class="field-label">Minimum hold</div>
+                    <input
+                      type="number"
+                      min="500"
+                      step="100"
+                      class="number-input"
+                      ng-model="entry.minHoldMs"
+                      ng-model-options="{ debounce: 150 }"
+                      ng-change="raceDirectorConfig.persistConfig()">
+                  </div>
+
+                  <div class="field-block is-narrow" ng-if="entry.type === 'trackside'">
+                    <div class="field-label">Cut distance (m)</div>
+                    <input
+                      type="number"
+                      min="10"
+                      step="5"
+                      class="number-input"
+                      ng-model="entry.triggerDistance"
+                      ng-model-options="{ debounce: 150 }"
+                      ng-change="raceDirectorConfig.persistConfig()">
+                  </div>
+
+                  <div class="field-block is-narrow" ng-if="entry.type === 'trackside'">
+                    <div class="field-label">Facing tolerance</div>
+                    <input
+                      type="number"
+                      min="15"
+                      max="180"
+                      step="5"
+                      class="number-input"
+                      ng-model="entry.angleToleranceDeg"
+                      ng-model-options="{ debounce: 150 }"
+                      ng-change="raceDirectorConfig.persistConfig()">
+                  </div>
+
+                  <div class="field-block is-choice" ng-if="entry.type === 'onboard'">
+                    <div class="field-label">Camera angle</div>
+                    <div
+                      class="option-group"
+                      tabindex="0"
+                      ng-keydown="raceDirectorConfig.onEntryOptionKeydown($event, entry, 'onboardAngle', raceDirectorConfig.state.options.onboardAngles, 'value')">
+                      <button
+                        type="button"
+                        class="option-button"
+                        ng-repeat="angle in raceDirectorConfig.state.options.onboardAngles"
+                        ng-class="{ 'is-active': entry.onboardAngle === angle.value }"
+                        ng-click="raceDirectorConfig.setEntryValue(entry, 'onboardAngle', angle.value)">
+                        {{ angle.label }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="field-block is-choice" ng-if="entry.type === 'onboard'">
+                    <div class="field-label">Target rule</div>
+                    <div
+                      class="option-group"
+                      tabindex="0"
+                      ng-keydown="raceDirectorConfig.onEntryOptionKeydown($event, entry, 'targetMode', raceDirectorConfig.state.options.targetModes, 'value')">
+                      <button
+                        type="button"
+                        class="option-button"
+                        ng-repeat="mode in raceDirectorConfig.state.options.targetModes"
+                        ng-class="{ 'is-active': entry.targetMode === mode.value }"
+                        ng-click="raceDirectorConfig.setEntryValue(entry, 'targetMode', mode.value)">
+                        {{ mode.label }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="field-block is-narrow" ng-if="raceDirectorConfig.showTargetValueField(entry)">
+                    <div class="field-label">{{ entry.targetMode === 'specificCar' ? 'Vehicle ID' : 'Target value' }}</div>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      class="number-input"
+                      ng-model="entry.targetValue"
+                      ng-model-options="{ debounce: 150 }"
+                      ng-change="raceDirectorConfig.persistConfig()">
+                  </div>
+                </div>
+
+                <div class="entry-footer">
+                  <div class="saved-meta" ng-if="entry.type === 'trackside'">
+                    {{ raceDirectorConfig.formatVector(entry.position) }} | FOV {{ raceDirectorConfig.formatFov(entry.fov) }}
+                  </div>
+                  <div class="saved-meta" ng-if="entry.type === 'onboard'">
+                    {{ raceDirectorConfig.describeTarget(entry) }}
+                  </div>
+
+                  <div class="entry-actions">
+                    <button type="button" class="small-button" ng-click="raceDirectorConfig.previewEntry(entry)">Preview</button>
+                    <button type="button" class="small-button" ng-if="entry.type === 'trackside'" ng-click="raceDirectorConfig.replaceTrackside(entry)">Re-capture</button>
+                    <button type="button" class="small-button" ng-click="raceDirectorConfig.moveEntry(entry, -1)">Up</button>
+                    <button type="button" class="small-button" ng-click="raceDirectorConfig.moveEntry(entry, 1)">Down</button>
+                    <button type="button" class="small-button is-danger" ng-click="raceDirectorConfig.deleteEntry(entry)">Delete</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div ng-switch-when="sequence">
+            <div class="config-card intro-card">
+              <div class="section-title">Sequence Order</div>
+              <div class="section-copy">Top to bottom is the lap order. The runtime bar skips through this sequence one shot at a time, and live playback jumps forward to the most relevant shot when resuming.</div>
+            </div>
+
+            <div class="empty-card" ng-if="!raceDirectorConfig.entryCount()">
+              <div class="empty-title">Sequence is empty</div>
+              <div class="empty-copy">Add shots first, then arrange them here in the order you want the lap covered.</div>
+            </div>
+
+            <div class="sequence-list" ng-if="raceDirectorConfig.entryCount()">
+              <div
+                class="sequence-row"
+                ng-repeat="entry in raceDirectorConfig.state.config.entries track by entry.id"
+                ng-class="{ 'is-disabled': !entry.enabled, 'is-active': raceDirectorConfig.state.runtime.activeEntryId === entry.id }">
+                <div class="sequence-index">{{ $index + 1 }}</div>
+                <div class="sequence-main">
+                  <div class="sequence-name">{{ entry.name }}</div>
+                  <div class="sequence-copy">{{ raceDirectorConfig.sequenceHint(entry) }}</div>
+                </div>
+                <div class="sequence-actions">
+                  <button type="button" class="small-button" ng-click="raceDirectorConfig.moveEntry(entry, -1)">Up</button>
+                  <button type="button" class="small-button" ng-click="raceDirectorConfig.moveEntry(entry, 1)">Down</button>
+                  <button type="button" class="small-button" ng-click="raceDirectorConfig.previewEntry(entry)">Go</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div ng-switch-when="live">
+            <div class="status-grid status-grid-four compact-gap">
+              <div class="value-card">
+                <div class="value-label">Current</div>
+                <div class="value-text">{{ raceDirectorConfig.activeShotLabel() }}</div>
+              </div>
+              <div class="value-card">
+                <div class="value-label">Next</div>
+                <div class="value-text">{{ raceDirectorConfig.nextShotLabel() }}</div>
+              </div>
+              <div class="value-card">
+                <div class="value-label">Reference Car</div>
+                <div class="value-text">{{ raceDirectorConfig.referenceLabel() }}</div>
+              </div>
+              <div class="value-card">
+                <div class="value-label">Last Switch</div>
+                <div class="value-text">{{ raceDirectorConfig.state.runtime.lastSwitchReason || 'Waiting' }}</div>
+              </div>
+            </div>
+
+            <div class="config-card live-card">
+              <div class="section-title">Live Vehicle Order</div>
+              <div class="section-copy">Approximate order is inferred from proximity to your saved trackside sequence.</div>
+
+              <div class="live-table" ng-if="raceDirectorConfig.state.vehicles.length">
+                <div
+                  class="live-row"
+                  ng-repeat="vehicle in raceDirectorConfig.state.vehicles track by vehicle.vehId"
+                  ng-class="{ 'is-reference': vehicle.isReference, 'is-focus': vehicle.isFocus }">
+                  <div class="live-pos">{{ $index + 1 }}</div>
+                  <div class="live-name">{{ vehicle.name }}</div>
+                  <div class="live-pill">{{ vehicle.speedKph }} km/h</div>
+                  <div class="live-pill" ng-if="vehicle.tracksideOrdinal">S{{ vehicle.tracksideOrdinal }}</div>
+                  <div class="live-pill" ng-if="!vehicle.tracksideOrdinal">--</div>
+                </div>
+              </div>
+
+              <div class="empty-card slim" ng-if="!raceDirectorConfig.state.vehicles.length">
+                <div class="empty-title">No active vehicles</div>
+                <div class="empty-copy">Spawn race cars to populate the live order table.</div>
+              </div>
+            </div>
+          </div>
+
+          <div ng-switch-when="display">
+            <div class="config-card display-card">
+              <div class="section-title">Display</div>
+              <div class="section-copy">UI scale applies to both the compact runtime bar and this setup window.</div>
+
+              <div class="config-row">
+                <div class="config-copy-block">
+                  <div class="field-label">UI scale</div>
+                  <div class="field-hint">Type percent like 100 or multiplier like 1.0.</div>
+                </div>
+                <div class="stepper">
+                  <button type="button" class="stepper-button" ng-click="raceDirectorConfig.decrementScale()">-</button>
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    class="stepper-input"
+                    ng-model="raceDirectorConfig.ui.scaleInput"
+                    ng-keydown="raceDirectorConfig.onScaleInputKeydown($event)"
+                    ng-blur="raceDirectorConfig.applyScaleInput()">
+                  <button type="button" class="stepper-button" ng-click="raceDirectorConfig.incrementScale()">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="config-card display-card">
+              <div class="section-title">Runtime Notes</div>
+              <div class="section-copy">Playback pauses if you manually change camera mode, switch focus, move freecam, or use direct camera controls. Resume restarts from the next relevant shot instead of the stale one.</div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="window-resize-handle"
+          ng-mousedown="raceDirectorConfig.startResize($event)"
+          aria-hidden="true"></div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,50 @@
+<div class="bngApp race-director-bar">
+  <div class="viewport">
+    <div class="scale-wrap" ng-style="raceDirector.scaleStyle()">
+      <div class="runtime-shell">
+        <div class="runtime-bar">
+          <button
+            type="button"
+            class="nav-button"
+            ng-click="raceDirector.previousShot()"
+            ng-disabled="!raceDirector.entryCount()">
+            &lt;
+          </button>
+
+          <div class="runtime-main">
+            <div class="runtime-meta">
+              <span class="state-dot" ng-class="raceDirector.runtimeToneClass()"></span>
+              <span class="runtime-state">{{ raceDirector.state.runtime.stateLabel || 'Idle' }}</span>
+              <span class="runtime-separator"></span>
+              <span class="runtime-mode">{{ raceDirector.currentShotModeLabel() }}</span>
+            </div>
+            <div class="runtime-camera">{{ raceDirector.activeShotLabel() }}</div>
+          </div>
+
+          <button
+            type="button"
+            class="nav-button"
+            ng-click="raceDirector.nextShot()"
+            ng-disabled="!raceDirector.entryCount()">
+            &gt;
+          </button>
+
+          <button
+            type="button"
+            class="control-button control-button-primary"
+            ng-click="raceDirector.togglePlayback()">
+            {{ raceDirector.state.runtime.playing ? 'Pause' : 'Play' }}
+          </button>
+
+          <button
+            type="button"
+            class="control-button"
+            ng-class="{ 'is-active': raceDirector.ui.configWindowOpen }"
+            ng-click="raceDirector.openConfigWindow()">
+            Config
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

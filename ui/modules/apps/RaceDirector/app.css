@@ -1,0 +1,196 @@
+.bngApp.race-director-bar,
+.race-director-bar {
+  --rdb-bg-top: rgba(24, 26, 32, 0.92);
+  --rdb-bg-mid: rgba(15, 17, 23, 0.90);
+  --rdb-bg-low: rgba(10, 12, 17, 0.88);
+  --rdb-surface: rgba(255, 255, 255, 0.05);
+  --rdb-border: rgba(255, 255, 255, 0.10);
+  --rdb-soft: rgba(255, 255, 255, 0.66);
+  --rdb-hard: #f3f4f7;
+  --rdb-accent-rgb: 128, 154, 182;
+  --rdb-accent-deep-rgb: 82, 104, 129;
+  --rdb-blue-rgb: 86, 156, 231;
+  --rdb-green-rgb: 100, 208, 132;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0 !important;
+  box-sizing: border-box;
+  color: var(--rdb-hard);
+  font-family: "Bahnschrift Condensed", "Arial Narrow", "Segoe UI", sans-serif;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  overflow: visible;
+}
+
+.race-director-bar .viewport {
+  width: calc(100% - 8px);
+  height: calc(100% - 8px);
+  margin: 4px 0 4px 4px;
+  overflow: visible;
+}
+
+.race-director-bar .scale-wrap {
+  width: 100%;
+  height: 100%;
+  transform-origin: top left;
+  transition: transform 180ms ease, width 180ms ease, height 180ms ease;
+  will-change: transform;
+}
+
+.race-director-bar .runtime-shell {
+  position: relative;
+  width: 100%;
+  min-height: 74px;
+  border-radius: 20px;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 18%),
+    linear-gradient(180deg, var(--rdb-bg-low) 0%, var(--rdb-bg-mid) 18%, var(--rdb-bg-top) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+.race-director-bar .runtime-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.12), transparent 28%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 34%);
+  opacity: 0.92;
+}
+
+.race-director-bar .runtime-bar {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 74px;
+  padding: 8px 10px 8px 12px;
+}
+
+.race-director-bar .runtime-main {
+  min-width: 0;
+  flex: 1;
+  padding: 8px 10px 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.race-director-bar .runtime-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rdb-soft);
+}
+
+.race-director-bar .runtime-camera {
+  margin-top: 6px;
+  font-size: 18px;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.race-director-bar .state-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.04);
+}
+
+.race-director-bar .state-dot.is-live {
+  background: rgb(var(--rdb-green-rgb));
+  box-shadow: 0 0 0 4px rgba(var(--rdb-green-rgb), 0.16);
+}
+
+.race-director-bar .state-dot.is-paused {
+  background: rgb(var(--rdb-blue-rgb));
+  box-shadow: 0 0 0 4px rgba(var(--rdb-blue-rgb), 0.16);
+}
+
+.race-director-bar .state-dot.is-idle {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.race-director-bar .runtime-separator {
+  width: 1px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.race-director-bar button {
+  border: 0;
+  cursor: pointer;
+  color: #ffffff;
+  font-family: inherit;
+  transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+}
+
+.race-director-bar button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.race-director-bar button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.race-director-bar .nav-button,
+.race-director-bar .control-button {
+  min-height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.race-director-bar .nav-button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.race-director-bar .control-button {
+  padding: 0 14px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+.race-director-bar .control-button-primary,
+.race-director-bar .control-button.is-active {
+  background: linear-gradient(180deg, rgba(var(--rdb-accent-rgb), 0.36), rgba(var(--rdb-accent-deep-rgb), 0.18));
+  box-shadow: inset 0 0 0 1px rgba(var(--rdb-accent-rgb), 0.28);
+}
+
+@media (max-width: 520px) {
+  .race-director-bar .runtime-bar {
+    gap: 6px;
+    padding: 7px 8px 7px 10px;
+  }
+
+  .race-director-bar .control-button {
+    padding: 0 10px;
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "domElement": "<race-director></race-director>",
+  "name": "RaceDirector",
+  "appName": "RaceDirector",
+  "types": [
+    "ui.apps.categories.racing"
+  ],
+  "author": "Codex",
+  "version": "0.3",
+  "description": "Compact runtime bar for the RaceDirector camera system.",
+  "directive": "raceDirector",
+  "category": "Gameplay",
+  "css": {
+    "width": "430px",
+    "height": "86px",
+    "top": "860px",
+    "left": "760px",
+    "min-width": "360px",
+    "min-height": "76px"
+  },
+  "isAuxiliary": false,
+  "interactive": "required",
+  "preserveAspectRatio": false
+}
