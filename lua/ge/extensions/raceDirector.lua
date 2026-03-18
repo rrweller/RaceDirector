@@ -1,14 +1,14 @@
 
 local M = {}
 
-local schemaVersion = 1
+local schemaVersion = 2
 local baseConfigDir = "/settings/raceDirector"
 local mapConfigDir = baseConfigDir .. "/maps"
 local defaultConfigFilename = "default.json"
 local defaultPresetName = "Default TV Coverage"
 local defaultTriggerDistance = 90
 local defaultAngleToleranceDeg = 75
-local defaultTracksideHoldMs = 2500
+local defaultTracksideHoldMs = 1000
 local defaultOnboardHoldMs = 2200
 local defaultCameraSpeed = 35
 local defaultLoopSequence = true
@@ -46,6 +46,7 @@ local lastPollMs = 0
 local idCounter = 0
 local vehiclesById = {}
 local progressByVehId = {}
+local activeTracksideSession = nil
 
 local runtime = {
   playing = false,
@@ -65,10 +66,15 @@ local runtime = {
   message = "",
   lastSwitchReason = "",
   lastSwitchMs = 0,
+  activeElapsedMs = 0,
   isFreeCamera = false,
   raceTickerDetected = false,
   expectedCamera = nil
 }
+
+local function clearTracksideSession()
+  activeTracksideSession = nil
+end
 
 local function nowMs()
   return Engine.Platform.getSystemTimeMS()
@@ -354,6 +360,7 @@ local function syncMap()
   if detectedMapId ~= currentMapId or not configCache then
     currentMapId = detectedMapId
     loadConfigForMap(currentMapId)
+    clearTracksideSession()
     runtime.activeEntryId = nil
     runtime.activeEntryName = ""
     runtime.activeEntryType = ""
@@ -366,6 +373,7 @@ local function syncMap()
     runtime.referenceVehName = ""
     runtime.pausedReason = ""
     runtime.message = "Loaded map config for " .. humanizeMapId(currentMapId)
+    runtime.activeElapsedMs = 0
     runtime.expectedCamera = nil
   end
 end
@@ -396,6 +404,65 @@ local function vecDirection(fromPos, toPos)
     y = dy * invLength,
     z = dz * invLength
   }, length
+end
+
+local function normalizeVec3(vector, fallback)
+  if not vector then
+    return fallback
+  end
+
+  local length = math.sqrt(
+    ((vector.x or 0) * (vector.x or 0)) +
+    ((vector.y or 0) * (vector.y or 0)) +
+    ((vector.z or 0) * (vector.z or 0))
+  )
+  if length <= 0.001 then
+    return fallback
+  end
+
+  local invLength = 1 / length
+  return {
+    x = (vector.x or 0) * invLength,
+    y = (vector.y or 0) * invLength,
+    z = (vector.z or 0) * invLength
+  }
+end
+
+local function dotVec3(left, right)
+  if not left or not right then
+    return 0
+  end
+
+  return ((left.x or 0) * (right.x or 0)) +
+    ((left.y or 0) * (right.y or 0)) +
+    ((left.z or 0) * (right.z or 0))
+end
+
+local function quatForward(rotation)
+  if not rotation then
+    return nil
+  end
+
+  local x = tonumber(rotation.x) or 0
+  local y = tonumber(rotation.y) or 0
+  local z = tonumber(rotation.z) or 0
+  local w = tonumber(rotation.w) or 1
+  local length = math.sqrt((x * x) + (y * y) + (z * z) + (w * w))
+  if length <= 0.001 then
+    return { x = 0, y = 1, z = 0 }
+  end
+
+  local invLength = 1 / length
+  x = x * invLength
+  y = y * invLength
+  z = z * invLength
+  w = w * invLength
+
+  return normalizeVec3({
+    x = (2 * x * y) - (2 * w * z),
+    y = (w * w) - (x * x) + (y * y) - (z * z),
+    z = (2 * y * z) + (2 * w * x)
+  }, { x = 0, y = 1, z = 0 })
 end
 
 local function pointSegmentMetrics(point, startPos, endPos)
@@ -452,6 +519,39 @@ local function directionAlignment(direction, velocity, speed)
     ((velocity.y or 0) * (direction.y or 0)) +
     ((velocity.z or 0) * (direction.z or 0))
   ) / math.max(speedValue, 0.001)
+end
+
+local function vehicleFocusPosition(vehicle)
+  local position = vehicle and vehicle.position or nil
+  if not position then
+    return nil
+  end
+
+  local speed = tonumber(vehicle and vehicle.speed) or 0
+  local velocity = vehicle and vehicle.velocity or nil
+  if speed <= 1 or not velocity then
+    return {
+      x = position.x or 0,
+      y = position.y or 0,
+      z = position.z or 0
+    }
+  end
+
+  local direction = normalizeVec3(velocity, nil)
+  if not direction then
+    return {
+      x = position.x or 0,
+      y = position.y or 0,
+      z = position.z or 0
+    }
+  end
+
+  local offset = 1.8
+  return {
+    x = (position.x or 0) + (direction.x or 0) * offset,
+    y = (position.y or 0) + (direction.y or 0) * offset,
+    z = (position.z or 0) + (direction.z or 0) * offset
+  }
 end
 
 local function quatDot(a, b)
@@ -566,6 +666,7 @@ local function buildTracksideAnalysis()
       entry.approachStart = previousEntry and previousEntry.position or nil
       entry.approachDirection, entry.approachLength = vecDirection(previousEntry and previousEntry.position or nil, entry.position)
       entry.departDirection, entry.departLength = vecDirection(entry.position, nextEntry and nextEntry.position or nil)
+      entry.cameraForward = quatForward(entry.rotation)
     end
   elseif analysis.count == 1 and analysis.list[1] then
     analysis.list[1].previousTracksideOrdinal = 1
@@ -575,6 +676,7 @@ local function buildTracksideAnalysis()
     analysis.list[1].approachLength = 0
     analysis.list[1].departDirection = nil
     analysis.list[1].departLength = 0
+    analysis.list[1].cameraForward = quatForward(analysis.list[1].rotation)
   end
 
   return analysis
@@ -586,26 +688,14 @@ local function evaluateVehicleAgainstTrackside(vehicle, entry)
   local dz = (entry.position.z or 0) - (vehicle.position.z or 0)
   local distance = math.sqrt(dx * dx + dy * dy + dz * dz)
   local triggerDistance = normalizeNumber(entry.triggerDistance, defaultTriggerDistance, 10, 600)
-  local corridorWidth = clamp(triggerDistance * 0.30, 12, 30)
-  local approachScore = 1
+  local corridorWidth = clamp(triggerDistance * 0.32, 12, 28)
   local travelScore = 1
   local corridorDistance = distance
   local progressRatio = 0
   local rawProgress = 0
+  local hasApproachSegment = entry.approachDirection and entry.approachStart and (entry.approachLength or 0) > 0.001
 
-  if (vehicle.speed or 0) > 1 and distance > 0.001 then
-    local invLength = 1 / distance
-    local toCamX = dx * invLength
-    local toCamY = dy * invLength
-    local toCamZ = dz * invLength
-    approachScore = (
-      (vehicle.velocity.x or 0) * toCamX +
-      (vehicle.velocity.y or 0) * toCamY +
-      (vehicle.velocity.z or 0) * toCamZ
-    ) / math.max(vehicle.speed, 0.001)
-  end
-
-  if entry.approachDirection and entry.approachStart and (entry.approachLength or 0) > 0.001 then
+  if hasApproachSegment then
     local metrics = pointSegmentMetrics(vehicle.position, entry.approachStart, entry.position)
     corridorDistance = metrics.distance
     progressRatio = metrics.progress
@@ -614,36 +704,35 @@ local function evaluateVehicleAgainstTrackside(vehicle, entry)
   else
     progressRatio = 1 - math.min(distance / math.max(triggerDistance, 1), 0.99)
     rawProgress = progressRatio
-    travelScore = approachScore
+    travelScore = 1
   end
 
-  local angleThreshold = math.cos(math.rad(normalizeNumber(entry.angleToleranceDeg, defaultAngleToleranceDeg, 15, 180)))
   local approaching = (vehicle.speed or 0) <= 1 or (
-    approachScore >= angleThreshold and
-    travelScore >= -0.05 and
-    rawProgress <= 1.15
+    travelScore >= -0.15 and
+    rawProgress <= 1.20
   )
-  local score = distance + (corridorDistance * 1.75)
+  local score = distance + (corridorDistance * 2.1)
 
-  if rawProgress < -0.20 then
-    score = score + (triggerDistance * 2.5)
+  if rawProgress < -0.25 then
+    score = score + (triggerDistance * 4)
   end
   if rawProgress > 1.25 then
     score = score + (triggerDistance * 4)
   end
-  if travelScore < -0.10 then
+  if travelScore < -0.20 then
     score = score + (triggerDistance * 6)
-  elseif travelScore < 0.20 then
-    score = score + (triggerDistance * 1.75)
+  elseif travelScore < 0 then
+    score = score + (triggerDistance * 2)
   end
   if corridorDistance > corridorWidth then
-    score = score + ((corridorDistance - corridorWidth) * 2)
+    score = score + ((corridorDistance - corridorWidth) * 3)
   end
 
   return {
     distance = distance,
-    approachScore = approachScore,
+    approachScore = travelScore,
     travelScore = travelScore,
+    cameraFacingScore = 1,
     approaching = approaching,
     corridorDistance = corridorDistance,
     corridorWidth = corridorWidth,
@@ -653,16 +742,89 @@ local function evaluateVehicleAgainstTrackside(vehicle, entry)
   }
 end
 
-local function progressForVehicle(vehicle, tracksideAnalysis)
+local function wrapOrdinal(ordinal, count)
+  local numericOrdinal = math.floor(tonumber(ordinal) or 0)
+  local total = math.floor(tonumber(count) or 0)
+  if total <= 0 then
+    return nil
+  end
+
+  while numericOrdinal < 1 do
+    numericOrdinal = numericOrdinal + total
+  end
+  while numericOrdinal > total do
+    numericOrdinal = numericOrdinal - total
+  end
+
+  return numericOrdinal
+end
+
+local function tracksideStepsForward(fromOrdinal, toOrdinal, count)
+  local fromValue = wrapOrdinal(fromOrdinal, count)
+  local toValue = wrapOrdinal(toOrdinal, count)
+  local total = math.floor(tonumber(count) or 0)
+  if not fromValue or not toValue or total <= 0 then
+    return nil
+  end
+
+  local steps = toValue - fromValue
+  while steps < 0 do
+    steps = steps + total
+  end
+  return steps
+end
+
+local function candidateTracksideOrdinals(count, previousOrdinal)
+  local ordinals = {}
+  local seen = {}
+
+  local function addCandidate(ordinal)
+    local wrapped = wrapOrdinal(ordinal, count)
+    if not wrapped or seen[wrapped] then
+      return
+    end
+    seen[wrapped] = true
+    table.insert(ordinals, wrapped)
+  end
+
+  if count <= 0 then
+    return ordinals
+  end
+
+  if not previousOrdinal then
+    for ordinal = 1, count do
+      addCandidate(ordinal)
+    end
+    return ordinals
+  end
+
+  addCandidate(previousOrdinal - 1)
+  addCandidate(previousOrdinal)
+  addCandidate(previousOrdinal + 1)
+  addCandidate(previousOrdinal + 2)
+
+  if count <= 4 then
+    for ordinal = 1, count do
+      addCandidate(ordinal)
+    end
+  end
+
+  return ordinals
+end
+
+local function progressForVehicle(vehicle, tracksideAnalysis, writeProgress)
   if not vehicle or tracksideAnalysis.count <= 0 then
     return nil
   end
 
+  local previous = progressByVehId[vehicle.vehId]
   local bestEntry = nil
   local bestOrdinal = nil
   local bestEval = nil
+  local candidateOrdinals = candidateTracksideOrdinals(tracksideAnalysis.count, previous and previous.ordinal or nil)
 
-  for ordinal, entry in ipairs(tracksideAnalysis.list) do
+  for _, ordinal in ipairs(candidateOrdinals) do
+    local entry = tracksideAnalysis.list[ordinal]
     local evaluation = evaluateVehicleAgainstTrackside(vehicle, entry)
     if not bestEval or evaluation.score < bestEval.score then
       bestEntry = entry
@@ -675,7 +837,7 @@ local function progressForVehicle(vehicle, tracksideAnalysis)
     return nil
   end
 
-  local previous = progressByVehId[vehicle.vehId] or { lap = 0, ordinal = bestOrdinal }
+  previous = previous or { lap = 0, ordinal = bestOrdinal }
   local lap = previous.lap or 0
 
   if tracksideAnalysis.count > 1 then
@@ -710,15 +872,101 @@ local function progressForVehicle(vehicle, tracksideAnalysis)
     progressRatio = fraction,
     corridorDistance = bestEval.corridorDistance
   }
-  progressByVehId[vehicle.vehId] = progress
+  if writeProgress ~= false then
+    progressByVehId[vehicle.vehId] = progress
+  end
   return progress
 end
 
-local function orderedVehicles(tracksideAnalysis)
+local function tracksideViewHalfAngle(entry, relaxed)
+  local baseFov = normalizeNumber(entry and entry.fov, 60, 5, 140)
+  local halfAngle = (baseFov * 0.5) + (relaxed and 8 or 4)
+  return clamp(halfAngle, 12, 88)
+end
+
+local function evaluateVehicleAgainstTracksideShot(vehicle, entry, relaxed)
+  local camPos = entry and entry.position or nil
+  local vehPos = vehicleFocusPosition(vehicle)
+  local forward = entry and (entry.cameraForward or quatForward(entry.rotation)) or nil
+  if not camPos or not vehPos then
+    return nil
+  end
+
+  local dx = (vehPos.x or 0) - (camPos.x or 0)
+  local dy = (vehPos.y or 0) - (camPos.y or 0)
+  local dz = (vehPos.z or 0) - (camPos.z or 0)
+  local distance = math.sqrt(dx * dx + dy * dy + dz * dz)
+  local triggerDistance = normalizeNumber(entry.triggerDistance, defaultTriggerDistance, 10, 600)
+  local maxDistance = triggerDistance * (relaxed and 1.10 or 1.00)
+  local toVehicleDirection = normalizeVec3({ x = dx, y = dy, z = dz }, nil)
+  local viewHalfAngle = tracksideViewHalfAngle(entry, relaxed)
+  local viewThreshold = math.cos(math.rad(viewHalfAngle))
+  local hasApproachSegment = entry and entry.approachDirection and entry.approachStart and (entry.approachLength or 0) > 0.001
+  local approachAlignment = directionAlignment(entry and entry.approachDirection or nil, vehicle and vehicle.velocity or nil, vehicle and vehicle.speed or nil)
+  local approachThreshold = relaxed and -0.35 or -0.20
+  local directionOk = approachAlignment >= approachThreshold
+  local corridorDistance = distance
+  local corridorWidth = clamp(triggerDistance * (relaxed and 0.58 or 0.48), 12, 40)
+  local corridorProgress = nil
+  local corridorRawProgress = nil
+  local inCorridor = true
+  local viewDot = 1
+
+  if forward and toVehicleDirection then
+    viewDot = dotVec3(forward, toVehicleDirection)
+  end
+
+  if hasApproachSegment then
+    local metrics = pointSegmentMetrics(vehPos, entry.approachStart, entry.position)
+    corridorDistance = metrics.distance
+    corridorProgress = metrics.progress
+    corridorRawProgress = metrics.rawProgress
+    inCorridor = corridorDistance <= corridorWidth and corridorRawProgress >= -0.30 and corridorRawProgress <= 1.35
+  end
+
+  local inFov = viewDot >= viewThreshold
+  local inRange = distance <= maxDistance
+  local visible = inFov and inRange and inCorridor and directionOk
+  local score = distance + ((1 - math.max(viewDot, -1)) * triggerDistance * 0.7) + (corridorDistance * 1.2)
+
+  if not inFov then
+    score = score + (triggerDistance * 8)
+  end
+  if not inRange then
+    score = score + ((distance - maxDistance) * 4) + (triggerDistance * 3)
+  end
+  if not inCorridor then
+    score = score + (triggerDistance * 5) + (math.max(corridorDistance - corridorWidth, 0) * 3)
+  end
+  if not directionOk then
+    score = score + (triggerDistance * 4)
+  end
+
+  return {
+    distance = distance,
+    maxDistance = maxDistance,
+    viewDot = viewDot,
+    viewHalfAngle = viewHalfAngle,
+    viewThreshold = viewThreshold,
+    inFov = inFov,
+    inRange = inRange,
+    inCorridor = inCorridor,
+    corridorDistance = corridorDistance,
+    corridorWidth = corridorWidth,
+    corridorProgress = corridorProgress,
+    corridorRawProgress = corridorRawProgress,
+    approachAlignment = approachAlignment,
+    directionOk = directionOk,
+    visible = visible,
+    score = score
+  }
+end
+
+local function orderedVehicles(tracksideAnalysis, writeProgress)
   local ordered = {}
 
   for vehId, vehicle in pairs(vehiclesById) do
-    local progress = progressForVehicle(vehicle, tracksideAnalysis)
+    local progress = progressForVehicle(vehicle, tracksideAnalysis, writeProgress)
     table.insert(ordered, {
       vehId = vehId,
       name = vehicle.name,
@@ -748,6 +996,105 @@ local function orderedVehicles(tracksideAnalysis)
   end
 
   return ordered
+end
+
+local function selectReferenceVehicle(ordered)
+  if type(ordered) ~= "table" or #ordered == 0 then
+    return nil
+  end
+
+  return ordered[1]
+end
+
+local function frontPackCount(ordered)
+  if type(ordered) ~= "table" then
+    return 0
+  end
+
+  return math.max(1, math.ceil(#ordered / 2))
+end
+
+local function selectFrontPackTriggerVehicle(entry, ordered)
+  local bestVehicle = nil
+  local bestEvaluation = nil
+  local bestVisibleVehicle = nil
+  local bestVisibleEvaluation = nil
+  local count = frontPackCount(ordered)
+  local index
+  local candidate
+  local vehicle
+  local evaluation
+
+  if not entry or count <= 0 then
+    return nil, nil
+  end
+
+  for index = 1, count do
+    candidate = ordered[index]
+    vehicle = candidate and vehiclesById[candidate.vehId] or nil
+    if vehicle then
+      evaluation = evaluateVehicleAgainstTracksideShot(vehicle, entry, false)
+      if evaluation and evaluation.visible and (not bestVisibleEvaluation or evaluation.score < bestVisibleEvaluation.score) then
+        bestVisibleVehicle = candidate
+        bestVisibleEvaluation = evaluation
+      end
+      if evaluation and (not bestEvaluation or evaluation.score < bestEvaluation.score) then
+        bestVehicle = candidate
+        bestEvaluation = evaluation
+      end
+    end
+  end
+
+  return bestVisibleVehicle or bestVehicle, bestVisibleEvaluation or bestEvaluation
+end
+
+local function collectTracksideVisibility(entry, ordered, relaxed)
+  local summary = {
+    visibleCount = 0,
+    visibleVehIds = {},
+    nearestVisibleVehicle = nil,
+    nearestVisibleEvaluation = nil,
+    frontPackVisibleCount = 0,
+    frontPackVisibleVehIds = {},
+    nearestFrontPackVisibleVehicle = nil,
+    nearestFrontPackVisibleEvaluation = nil
+  }
+  local count = type(ordered) == "table" and #ordered or 0
+  local frontCount = frontPackCount(ordered)
+  local index
+  local candidate
+  local vehicle
+  local evaluation
+
+  if not entry or count <= 0 then
+    return summary
+  end
+
+  for index = 1, count do
+    candidate = ordered[index]
+    vehicle = candidate and vehiclesById[candidate.vehId] or nil
+    if vehicle then
+      evaluation = evaluateVehicleAgainstTracksideShot(vehicle, entry, relaxed)
+      if evaluation and evaluation.visible then
+        summary.visibleCount = summary.visibleCount + 1
+        summary.visibleVehIds[candidate.vehId] = true
+        if index <= frontCount then
+          summary.frontPackVisibleCount = summary.frontPackVisibleCount + 1
+          summary.frontPackVisibleVehIds[candidate.vehId] = true
+          if not summary.nearestFrontPackVisibleEvaluation or evaluation.distance < summary.nearestFrontPackVisibleEvaluation.distance then
+            summary.nearestFrontPackVisibleVehicle = candidate
+            summary.nearestFrontPackVisibleEvaluation = evaluation
+          end
+        end
+        if not summary.nearestVisibleEvaluation or evaluation.distance < summary.nearestVisibleEvaluation.distance then
+          summary.nearestVisibleVehicle = candidate
+          summary.nearestVisibleEvaluation = evaluation
+        end
+      end
+    end
+  end
+
+  return summary
 end
 
 local function findEntryIndexById(entryId)
@@ -817,25 +1164,43 @@ local function getPreviousEnabledIndex(startIndex, wrapAround)
   return nil
 end
 
-local function findResumeIndex(referenceVehicle, tracksideAnalysis)
+local tracksideReady
+
+local function findResumeIndex(referenceVehicle, tracksideAnalysis, ordered)
   if not configCache or type(configCache.entries) ~= "table" or #configCache.entries == 0 then
     return nil
   end
 
   local firstTracksideIndex = nil
   local firstEnabledIndex = nil
-  local targetOrdinal = referenceVehicle and referenceVehicle.tracksideOrdinal or nil
+  local targetOrdinal = wrapOrdinal(referenceVehicle and referenceVehicle.tracksideOrdinal or 1, tracksideAnalysis.count) or 1
 
   for index, entry in ipairs(configCache.entries) do
     if entry and entry.enabled then
       firstEnabledIndex = firstEnabledIndex or index
       if entry.type == "trackside" then
         firstTracksideIndex = firstTracksideIndex or index
-        local ordinal = tracksideAnalysis.ordinalByEntryId[entry.id]
-        if targetOrdinal and ordinal and ordinal >= targetOrdinal then
-          return index
+      end
+    end
+  end
+
+  if tracksideAnalysis.count > 0 then
+    for offset = 0, tracksideAnalysis.count - 1 do
+      local ordinal = wrapOrdinal(targetOrdinal + offset, tracksideAnalysis.count)
+      local entry = ordinal and tracksideAnalysis.list[ordinal] or nil
+      if entry and entry.sequenceIndex then
+        local _, ready = tracksideReady(entry, ordered)
+        if ready then
+          return entry.sequenceIndex
         end
       end
+    end
+  end
+
+  if tracksideAnalysis.count > 0 then
+    local entry = tracksideAnalysis.list[targetOrdinal]
+    if entry and entry.sequenceIndex then
+      return entry.sequenceIndex
     end
   end
 
@@ -869,8 +1234,80 @@ local function pauseDirector(reason)
   runtime.stateLabel = "Paused"
   runtime.pausedReason = sanitizeText(reason, "Paused", 120)
   runtime.expectedCamera = nil
+  clearTracksideSession()
   markMessage(runtime.pausedReason)
   updateNextEntryState()
+end
+
+local function beginTracksideSession(ordered)
+  local expectedVehIds = {}
+  local expectedCount = 0
+  local requiredSeenCount = 0
+  local trackedCount = frontPackCount(ordered)
+  local index
+  local candidate
+
+  if type(ordered) == "table" then
+    for index = 1, trackedCount do
+      candidate = ordered[index]
+      if candidate and candidate.vehId and not expectedVehIds[candidate.vehId] then
+        expectedVehIds[candidate.vehId] = true
+        expectedCount = expectedCount + 1
+      end
+    end
+  end
+
+  if expectedCount > 0 then
+    requiredSeenCount = math.max(1, math.floor((expectedCount * 0.5) + 0.5))
+  end
+
+  activeTracksideSession = {
+    expectedVehIds = expectedVehIds,
+    expectedCount = expectedCount,
+    requiredSeenCount = requiredSeenCount,
+    seenVehIds = {},
+    seenCount = 0,
+    lastVisibleMs = nil
+  }
+end
+
+local function updateTracksideSession(visibility)
+  local session = activeTracksideSession
+  local visibleVehIds = visibility and visibility.visibleVehIds or nil
+  local currentTime = nowMs()
+  local seenCount = 0
+  local expectedCount = 0
+  local requiredSeenCount = 0
+  local visibleExpectedCount = 0
+  local clearDurationMs = 0
+  local vehId
+
+  if not session then
+    return 0, 0, 0, 0, 0
+  end
+
+  expectedCount = tonumber(session.expectedCount) or 0
+  requiredSeenCount = tonumber(session.requiredSeenCount) or 0
+  if type(visibleVehIds) == "table" then
+    for vehId in pairs(visibleVehIds) do
+      if expectedCount <= 0 or session.expectedVehIds[vehId] then
+        if not session.seenVehIds[vehId] then
+          session.seenVehIds[vehId] = true
+          session.seenCount = (session.seenCount or 0) + 1
+        end
+        visibleExpectedCount = visibleExpectedCount + 1
+      end
+    end
+  end
+  if visibleExpectedCount > 0 then
+    session.lastVisibleMs = currentTime
+  end
+
+  seenCount = tonumber(session.seenCount) or 0
+  if session.lastVisibleMs then
+    clearDurationMs = math.max(0, currentTime - session.lastVisibleMs)
+  end
+  return seenCount, expectedCount, requiredSeenCount, visibleExpectedCount, clearDurationMs
 end
 
 local function applyTracksideEntry(entry)
@@ -975,6 +1412,7 @@ local function activateEntryByIndex(index, reason, ordered, tracksideAnalysis)
   runtime.activeEntryType = entry.type
   runtime.activeEntryIndex = index
   runtime.lastSwitchMs = nowMs()
+  runtime.activeElapsedMs = 0
   runtime.lastSwitchReason = sanitizeText(reason, "Switch", 80)
   runtime.stateLabel = runtime.playing and "Playing" or "Preview"
   runtime.pausedReason = ""
@@ -982,26 +1420,56 @@ local function activateEntryByIndex(index, reason, ordered, tracksideAnalysis)
 
   if entry.type == "trackside" and tracksideAnalysis then
     runtime.activeTracksideOrdinal = tracksideAnalysis.ordinalByEntryId[entry.id]
+    beginTracksideSession(ordered)
   else
     runtime.activeTracksideOrdinal = nil
+    clearTracksideSession()
   end
 
   return true
 end
 
-local function tracksideReady(referenceVehicle, entry)
-  if not referenceVehicle or not entry or not vehiclesById[referenceVehicle.vehId] then
-    return false, nil
+tracksideReady = function(entry, ordered)
+  if not entry then
+    return nil, false, nil, nil
   end
 
-  local evaluation = evaluateVehicleAgainstTrackside(vehiclesById[referenceVehicle.vehId], entry)
-  local triggerDistance = normalizeNumber(entry.triggerDistance, defaultTriggerDistance, 10, 600)
-  local progressGate = (entry.approachLength or 0) > math.max(triggerDistance * 0.8, 25) and 0.15 or 0.05
-  local ready = evaluation.distance <= triggerDistance * 1.05
-    and evaluation.corridorDistance <= evaluation.corridorWidth
-    and evaluation.rawProgress >= progressGate
-    and evaluation.approaching
-  return ready, evaluation
+  local visibility = collectTracksideVisibility(entry, ordered, false)
+  local triggerVehicle = visibility.nearestFrontPackVisibleVehicle or visibility.nearestVisibleVehicle
+  local evaluation = visibility.nearestFrontPackVisibleEvaluation or visibility.nearestVisibleEvaluation
+  local ready = (visibility.frontPackVisibleCount or 0) > 0
+  return triggerVehicle, ready, evaluation, visibility
+end
+
+local function findNextReadyTracksideIndex(startIndex, ordered, maxTracksideHops)
+  if not configCache or type(configCache.entries) ~= "table" or #configCache.entries == 0 then
+    return nil
+  end
+
+  local size = #configCache.entries
+  local cursor = startIndex or 0
+  local hops = 0
+
+  for _ = 1, size do
+    cursor = getNextEnabledIndex(cursor, isLoopSequenceEnabled())
+    if not cursor then
+      return nil
+    end
+
+    local entry = configCache.entries[cursor]
+    if entry and entry.type == "trackside" then
+      hops = hops + 1
+      if maxTracksideHops and maxTracksideHops > 0 and hops > maxTracksideHops then
+        return nil
+      end
+      local _, ready = tracksideReady(entry, ordered)
+      if ready then
+        return cursor
+      end
+    end
+  end
+
+  return nil
 end
 
 local function detectManualOverride()
@@ -1060,16 +1528,31 @@ end
 local function updateReferenceVehicle(ordered)
   runtime.referenceVehId = nil
   runtime.referenceVehName = ""
-  if ordered[1] then
-    runtime.referenceVehId = ordered[1].vehId
-    runtime.referenceVehName = ordered[1].name
+  local referenceVehicle = selectReferenceVehicle(ordered)
+  if referenceVehicle then
+    runtime.referenceVehId = referenceVehicle.vehId
+    runtime.referenceVehName = referenceVehicle.name
   end
 end
 
-local function updateDirector()
+local function advanceActiveElapsed(dtReal, dtSim)
+  if not runtime.playing or not runtime.activeEntryId then
+    return
+  end
+
+  local deltaSeconds = tonumber(dtSim)
+  if not deltaSeconds then
+    deltaSeconds = tonumber(dtReal)
+  end
+  deltaSeconds = math.max(tonumber(deltaSeconds) or 0, 0)
+  runtime.activeElapsedMs = math.max(0, (runtime.activeElapsedMs or 0) + (deltaSeconds * 1000))
+end
+
+local function updateDirector(dtReal, dtSim, dtRaw)
   syncMap()
   updateRuntimeCameraFlags()
   updateVehicleCache(false)
+  advanceActiveElapsed(dtReal, dtSim)
 
   local tracksideAnalysis = buildTracksideAnalysis()
   local ordered = orderedVehicles(tracksideAnalysis)
@@ -1095,12 +1578,12 @@ local function updateDirector()
     return
   end
 
-  local referenceVehicle = ordered[1]
+  local referenceVehicle = selectReferenceVehicle(ordered)
   local activeIndex = runtime.activeEntryIndex
   local activeEntry = activeIndex and configCache.entries[activeIndex] or nil
 
   if not activeEntry or not activeEntry.enabled then
-    local resumeIndex = findResumeIndex(referenceVehicle, tracksideAnalysis)
+    local resumeIndex = findResumeIndex(referenceVehicle, tracksideAnalysis, ordered)
     if resumeIndex then
       activateEntryByIndex(resumeIndex, "Resume", ordered, tracksideAnalysis)
     else
@@ -1109,14 +1592,14 @@ local function updateDirector()
     return
   end
 
-  local elapsed = nowMs() - runtime.lastSwitchMs
-  local activeHoldMs = normalizeInteger(activeEntry.minHoldMs, activeEntry.type == "trackside" and defaultTracksideHoldMs or defaultOnboardHoldMs, 500, 20000)
+  local elapsed = runtime.activeElapsedMs or 0
+  local activeMinHoldMs = normalizeInteger(activeEntry.minHoldMs, activeEntry.type == "trackside" and defaultTracksideHoldMs or defaultOnboardHoldMs, 500, 20000)
   local nextIndex = getNextEnabledIndex(activeIndex, isLoopSequenceEnabled())
   local nextEntry = nextIndex and configCache.entries[nextIndex] or nil
 
   updateNextEntryState()
 
-  if elapsed < activeHoldMs then
+  if elapsed < activeMinHoldMs then
     runtime.stateLabel = "Playing"
     return
   end
@@ -1130,47 +1613,60 @@ local function updateDirector()
     return
   end
 
+  local currentTracksideVisibility = nil
+  local currentTracksideReleased = true
+
+  if activeEntry.type == "trackside" then
+    local seenCount
+    local expectedCount
+    local requiredSeenCount
+    local visibleExpectedCount
+    local clearDurationMs
+    local referenceSteps = nil
+    local referenceMovedAhead = false
+    local seenEnough = false
+    currentTracksideVisibility = collectTracksideVisibility(activeEntry, ordered, true)
+    seenCount, expectedCount, requiredSeenCount, visibleExpectedCount, clearDurationMs = updateTracksideSession(currentTracksideVisibility)
+    referenceSteps = tracksideStepsForward(runtime.activeTracksideOrdinal, referenceVehicle and referenceVehicle.tracksideOrdinal or nil, tracksideAnalysis.count)
+    referenceMovedAhead = referenceSteps ~= nil and referenceSteps >= 1
+    seenEnough = requiredSeenCount > 0 and seenCount >= requiredSeenCount
+
+    currentTracksideReleased = visibleExpectedCount == 0 and clearDurationMs >= 120 and (
+      seenEnough or
+      (referenceMovedAhead and seenCount > 0)
+    )
+  end
+
   if nextEntry.type == "onboard" then
-    activateEntryByIndex(nextIndex, "Insert onboard", ordered, tracksideAnalysis)
-    return
-  end
-
-  local nextOrdinal = tracksideAnalysis.ordinalByEntryId[nextEntry.id]
-  local activeOrdinal = activeEntry.type == "trackside" and tracksideAnalysis.ordinalByEntryId[activeEntry.id] or nil
-
-  if referenceVehicle.tracksideOrdinal and nextOrdinal and referenceVehicle.tracksideOrdinal > nextOrdinal then
-    local resumeIndex = findResumeIndex(referenceVehicle, tracksideAnalysis)
-    if resumeIndex and resumeIndex ~= activeIndex then
-      activateEntryByIndex(resumeIndex, "Skip ahead", ordered, tracksideAnalysis)
+    if activeEntry.type ~= "trackside" or currentTracksideReleased then
+      local onboardAdvanceReason = activeEntry.type == "trackside" and "Track clear" or "Insert onboard"
+      activateEntryByIndex(nextIndex, onboardAdvanceReason, ordered, tracksideAnalysis)
+    else
+      runtime.stateLabel = "Playing"
     end
     return
   end
 
-  if activeOrdinal and referenceVehicle.tracksideOrdinal and referenceVehicle.tracksideOrdinal > activeOrdinal + 1 then
-    local resumeIndex = findResumeIndex(referenceVehicle, tracksideAnalysis)
-    if resumeIndex and resumeIndex ~= activeIndex then
-      activateEntryByIndex(resumeIndex, "Catch up", ordered, tracksideAnalysis)
+  local triggerVehicle, ready, evaluation = tracksideReady(nextEntry, ordered)
+  if ready and evaluation and triggerVehicle and (activeEntry.type ~= "trackside" or currentTracksideReleased) then
+    local tracksideAdvanceReason = activeEntry.type == "trackside" and "Track clear" or "Shot ready"
+    activateEntryByIndex(nextIndex, tracksideAdvanceReason, ordered, tracksideAnalysis)
+  elseif activeEntry.type == "trackside" and currentTracksideReleased then
+    local recoveryIndex = findNextReadyTracksideIndex(activeIndex, ordered, 2)
+    if recoveryIndex and recoveryIndex ~= activeIndex and recoveryIndex ~= nextIndex then
+      activateEntryByIndex(recoveryIndex, "Recover sequence", ordered, tracksideAnalysis)
+    else
+      runtime.stateLabel = "Playing"
     end
-    return
-  end
-
-  local ready, evaluation = tracksideReady(referenceVehicle, nextEntry)
-  if ready and evaluation and (
-    referenceVehicle.tracksideOrdinal == nextOrdinal or
-    (evaluation.progressRatio or 0) >= 0.70
-  ) then
-    activateEntryByIndex(nextIndex, "Approaching shot", ordered, tracksideAnalysis)
   else
     runtime.stateLabel = "Playing"
   end
 end
 
-local function buildVehicleSummary()
-  local tracksideAnalysis = buildTracksideAnalysis()
-  local ordered = orderedVehicles(tracksideAnalysis)
+local function buildVehicleSummaryFromOrdered(ordered)
   local summary = {}
 
-  for _, vehicle in ipairs(ordered) do
+  for _, vehicle in ipairs(ordered or {}) do
     table.insert(summary, {
       vehId = vehicle.vehId,
       name = vehicle.name,
@@ -1186,18 +1682,40 @@ end
 
 local function buildState()
   syncMap()
-  updateRuntimeCameraFlags()
-  updateVehicleCache(false)
-  updateReferenceVehicle(orderedVehicles(buildTracksideAnalysis()))
-  updateNextEntryState()
+  local tracksideAnalysis = buildTracksideAnalysis()
+  local ordered = orderedVehicles(tracksideAnalysis, false)
+  local runtimeSnapshot = copyTable(runtime)
+  local referenceVehicle = selectReferenceVehicle(ordered)
+  local nextIndex = nil
+  local nextEntry = nil
+
+  runtimeSnapshot.referenceVehId = nil
+  runtimeSnapshot.referenceVehName = ""
+  if referenceVehicle then
+    runtimeSnapshot.referenceVehId = referenceVehicle.vehId
+    runtimeSnapshot.referenceVehName = referenceVehicle.name
+  end
+
+  runtimeSnapshot.nextEntryId = nil
+  runtimeSnapshot.nextEntryName = ""
+  runtimeSnapshot.nextEntryIndex = nil
+  if runtimeSnapshot.activeEntryIndex then
+    nextIndex = getNextEnabledIndex(runtimeSnapshot.activeEntryIndex, isLoopSequenceEnabled())
+    nextEntry = nextIndex and configCache.entries[nextIndex] or nil
+    if nextEntry then
+      runtimeSnapshot.nextEntryId = nextEntry.id
+      runtimeSnapshot.nextEntryName = nextEntry.name
+      runtimeSnapshot.nextEntryIndex = nextIndex
+    end
+  end
 
   return {
     mapId = currentMapId,
     mapLabel = humanizeMapId(currentMapId),
     configPath = currentConfigPath,
     config = copyTable(configCache or defaultConfig(currentMapId)),
-    runtime = copyTable(runtime),
-    vehicles = buildVehicleSummary(),
+    runtime = runtimeSnapshot,
+    vehicles = buildVehicleSummaryFromOrdered(ordered),
     options = {
       onboardAngles = copyTable(onboardAngles),
       targetModes = copyTable(targetModes)
@@ -1206,7 +1724,6 @@ local function buildState()
 end
 
 local function getState()
-  updateDirector()
   return buildState()
 end
 
@@ -1230,10 +1747,14 @@ local function setPlaying(enabled)
     runtime.activeEntryName = ""
     runtime.activeEntryType = ""
     runtime.activeEntryIndex = nil
+    runtime.activeElapsedMs = 0
     runtime.expectedCamera = nil
+    clearTracksideSession()
     updateDirector()
   else
+    runtime.activeElapsedMs = 0
     runtime.expectedCamera = nil
+    clearTracksideSession()
     updateNextEntryState()
   end
 
@@ -1257,7 +1778,7 @@ local function skipShot(offset)
       targetIndex = getPreviousEnabledIndex(runtime.activeEntryIndex)
     end
   else
-    local resumeIndex = findResumeIndex(referenceVehicle, tracksideAnalysis) or getNextEnabledIndex(0)
+    local resumeIndex = findResumeIndex(referenceVehicle, tracksideAnalysis, ordered) or getNextEnabledIndex(0)
     if direction >= 0 then
       targetIndex = resumeIndex
     else
@@ -1359,6 +1880,7 @@ local function deleteEntry(entryId)
     runtime.activeEntryIndex = nil
     runtime.activeEntryName = ""
     runtime.activeEntryType = ""
+    runtime.activeElapsedMs = 0
   end
   saveConfigToDisk(configCache)
   markMessage("Deleted sequence entry.")

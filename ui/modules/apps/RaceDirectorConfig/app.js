@@ -63,7 +63,11 @@ angular.module('beamng.apps').directive('raceDirectorConfig', ['$interval', func
       vm.ui = {
         tab: 'overview',
         scaleInput: '100',
-        collapsedEntries: {}
+        collapsedEntries: {},
+        fieldDrafts: {},
+        invalidFields: {},
+        fieldLocks: {},
+        activeFieldKey: ''
       }
       vm.settings = {
         uiScale: 1
@@ -317,7 +321,7 @@ angular.module('beamng.apps').directive('raceDirectorConfig', ['$interval', func
         }
 
         if (entry.type === 'trackside') {
-          return 'Uses the saved freecam transform when the reference car reaches this camera zone.'
+          return 'Holds this saved camera while cars remain inside its view and range.'
         }
 
         return 'Switches into BeamNG\'s ' + vm.onboardAngleLabel(entry.onboardAngle) + ' camera for a selected race target.'
@@ -329,10 +333,10 @@ angular.module('beamng.apps').directive('raceDirectorConfig', ['$interval', func
         }
 
         if (entry.type === 'trackside') {
-          return 'Cut ' + (entry.triggerDistance || 0) + 'm | Hold ' + (entry.minHoldMs || 0) + 'ms | Facing ' + (entry.angleToleranceDeg || 0) + 'deg'
+          return 'Range ' + (entry.triggerDistance || 0) + 'm | Min ' + (entry.minHoldMs || 0) + 'ms'
         }
 
-        return vm.onboardAngleLabel(entry.onboardAngle) + ' | Hold ' + (entry.minHoldMs || 0) + 'ms | ' + vm.describeTarget(entry)
+        return vm.onboardAngleLabel(entry.onboardAngle) + ' | Min ' + (entry.minHoldMs || 0) + 'ms | ' + vm.describeTarget(entry)
       }
 
       vm.sequenceHint = function (entry) {
@@ -341,10 +345,10 @@ angular.module('beamng.apps').directive('raceDirectorConfig', ['$interval', func
         }
 
         if (entry.type === 'trackside') {
-          return 'Trackside | cut distance ' + (entry.triggerDistance || 0) + 'm | hold ' + (entry.minHoldMs || 0) + 'ms'
+          return 'Trackside | range ' + (entry.triggerDistance || 0) + 'm | min ' + (entry.minHoldMs || 0) + 'ms'
         }
 
-        return 'Onboard | ' + vm.onboardAngleLabel(entry.onboardAngle) + ' | ' + vm.describeTarget(entry) + ' | hold ' + (entry.minHoldMs || 0) + 'ms'
+        return 'Onboard | ' + vm.onboardAngleLabel(entry.onboardAngle) + ' | ' + vm.describeTarget(entry) + ' | min ' + (entry.minHoldMs || 0) + 'ms'
       }
 
       vm.formatVector = function (vector) {
@@ -418,6 +422,88 @@ angular.module('beamng.apps').directive('raceDirectorConfig', ['$interval', func
         return style
       }
 
+      vm.entryFieldKey = function (entry, key) {
+        if (!entry || !entry.id || !key) {
+          return ''
+        }
+
+        return 'entry:' + entry.id + ':' + key
+      }
+
+      vm.configFieldKey = function (key) {
+        if (!key) {
+          return ''
+        }
+
+        return 'config:' + key
+      }
+
+      vm.beginFieldEdit = function (fieldKey) {
+        if (!fieldKey) {
+          return
+        }
+
+        if (vm.ui.fieldDrafts[fieldKey] === undefined) {
+          vm.ui.fieldDrafts[fieldKey] = normalizeFieldDraftValue(resolveFieldValueFromState(fieldKey))
+        }
+        vm.ui.activeFieldKey = fieldKey
+        vm.ui.fieldLocks[fieldKey] = true
+      }
+
+      vm.onFieldInput = function (fieldKey) {
+        if (!fieldKey) {
+          return
+        }
+
+        vm.ui.fieldLocks[fieldKey] = true
+        delete vm.ui.invalidFields[fieldKey]
+      }
+
+      vm.isFieldInvalid = function (fieldKey) {
+        return !!(fieldKey && vm.ui.invalidFields[fieldKey])
+      }
+
+      vm.commitConfigTextField = function (key, options) {
+        var fieldKey = vm.configFieldKey(key)
+        var target = vm.state && vm.state.config ? vm.state.config : null
+        commitTextField(fieldKey, target, key, options)
+      }
+
+      vm.commitEntryTextField = function (entry, key, options) {
+        commitTextField(vm.entryFieldKey(entry, key), entry, key, options)
+      }
+
+      vm.commitEntryNumberField = function (entry, key, options) {
+        commitNumberField(vm.entryFieldKey(entry, key), entry, key, options)
+      }
+
+      vm.onFieldKeydown = function ($event, fieldType, target, key, options) {
+        if (!$event || !$event.key) {
+          return
+        }
+
+        if ($event.key === 'Enter') {
+          commitFieldByType(fieldType, target, key, options)
+          if ($event.target && typeof $event.target.blur === 'function') {
+            $event.target.blur()
+          }
+          if (typeof $event.preventDefault === 'function') {
+            $event.preventDefault()
+          }
+          return
+        }
+
+        if ($event.key === 'Escape') {
+          revertFieldByType(fieldType, target, key)
+          if ($event.target && typeof $event.target.blur === 'function') {
+            $event.target.blur()
+          }
+          if (typeof $event.preventDefault === 'function') {
+            $event.preventDefault()
+          }
+        }
+      }
+
       vm.startDrag = function ($event) {
         var sourceEvent
         var containerRect
@@ -473,6 +559,259 @@ angular.module('beamng.apps').directive('raceDirectorConfig', ['$interval', func
         return total
       }
 
+      function commitFieldByType(fieldType, target, key, options) {
+        if (fieldType === 'configText') {
+          vm.commitConfigTextField(key, options)
+          return
+        }
+
+        if (fieldType === 'entryText') {
+          vm.commitEntryTextField(target, key, options)
+          return
+        }
+
+        if (fieldType === 'entryNumber') {
+          vm.commitEntryNumberField(target, key, options)
+        }
+      }
+
+      function revertFieldByType(fieldType, target, key) {
+        if (fieldType === 'configText') {
+          revertFieldDraft(vm.configFieldKey(key), vm.state && vm.state.config ? vm.state.config[key] : '')
+          return
+        }
+
+        if (fieldType === 'entryText' || fieldType === 'entryNumber') {
+          revertFieldDraft(vm.entryFieldKey(target, key), target && key ? target[key] : '')
+        }
+      }
+
+      function syncAllFieldDrafts() {
+        var validKeys = {}
+        var config = vm.state && vm.state.config ? vm.state.config : {}
+        var entries = config.entries || []
+
+        syncTrackedField(validKeys, vm.configFieldKey('presetName'), config.presetName)
+
+        angular.forEach(entries, function (entry) {
+          if (!entry || !entry.id) {
+            return
+          }
+
+          syncTrackedField(validKeys, vm.entryFieldKey(entry, 'name'), entry.name)
+          syncTrackedField(validKeys, vm.entryFieldKey(entry, 'minHoldMs'), entry.minHoldMs)
+
+          if (entry.type === 'trackside') {
+            syncTrackedField(validKeys, vm.entryFieldKey(entry, 'triggerDistance'), entry.triggerDistance)
+          }
+
+          if (entry.type === 'onboard' && vm.showTargetValueField(entry)) {
+            syncTrackedField(validKeys, vm.entryFieldKey(entry, 'targetValue'), entry.targetValue)
+          }
+        })
+
+        pruneStaleFieldState(validKeys)
+      }
+
+      function syncTrackedField(validKeys, fieldKey, value) {
+        if (!fieldKey) {
+          return
+        }
+
+        validKeys[fieldKey] = true
+        if (vm.ui.fieldLocks[fieldKey] || vm.ui.invalidFields[fieldKey]) {
+          return
+        }
+
+        vm.ui.fieldDrafts[fieldKey] = normalizeFieldDraftValue(value)
+        delete vm.ui.invalidFields[fieldKey]
+      }
+
+      function pruneStaleFieldState(validKeys) {
+        angular.forEach(vm.ui.fieldDrafts, function (_value, fieldKey) {
+          if (!validKeys[fieldKey]) {
+            delete vm.ui.fieldDrafts[fieldKey]
+          }
+        })
+
+        angular.forEach(vm.ui.invalidFields, function (_value, fieldKey) {
+          if (!validKeys[fieldKey]) {
+            delete vm.ui.invalidFields[fieldKey]
+          }
+        })
+
+        angular.forEach(vm.ui.fieldLocks, function (_value, fieldKey) {
+          if (!validKeys[fieldKey]) {
+            delete vm.ui.fieldLocks[fieldKey]
+          }
+        })
+
+        if (vm.ui.activeFieldKey && !validKeys[vm.ui.activeFieldKey]) {
+          vm.ui.activeFieldKey = ''
+        }
+      }
+
+      function normalizeFieldDraftValue(value) {
+        if (value == null) {
+          return ''
+        }
+
+        return String(value)
+      }
+
+      function resolveValidationOption(option, target, key) {
+        if (typeof option === 'function') {
+          return option(target, key)
+        }
+
+        return option
+      }
+
+      function resolveFieldValueFromState(fieldKey) {
+        var segments
+        var entryId
+        var entryKey
+        var entries
+        var index
+        var entry
+        if (!fieldKey || typeof fieldKey !== 'string') {
+          return ''
+        }
+
+        if (fieldKey.indexOf('config:') === 0) {
+          return vm.state && vm.state.config ? vm.state.config[fieldKey.slice(7)] : ''
+        }
+
+        if (fieldKey.indexOf('entry:') === 0) {
+          segments = fieldKey.split(':')
+          if (segments.length < 3) {
+            return ''
+          }
+          entryId = segments[1]
+          entryKey = segments.slice(2).join(':')
+          entries = vm.state && vm.state.config && vm.state.config.entries ? vm.state.config.entries : []
+          for (index = 0; index < entries.length; index++) {
+            entry = entries[index]
+            if (entry && entry.id === entryId) {
+              return entry[entryKey]
+            }
+          }
+        }
+
+        return ''
+      }
+
+      function markFieldInvalid(fieldKey) {
+        if (!fieldKey) {
+          return
+        }
+
+        vm.ui.invalidFields[fieldKey] = true
+        delete vm.ui.fieldLocks[fieldKey]
+        if (vm.ui.activeFieldKey === fieldKey) {
+          vm.ui.activeFieldKey = ''
+        }
+      }
+
+      function commitTextField(fieldKey, target, key, options) {
+        var draftValue
+        var nextValue
+        var required
+        var maxLength
+
+        if (!fieldKey || !target || !key) {
+          return
+        }
+
+        draftValue = normalizeFieldDraftValue(vm.ui.fieldDrafts[fieldKey])
+        nextValue = draftValue.trim()
+        required = !options || options.required !== false
+        maxLength = resolveValidationOption(options && options.maxLength, target, key)
+
+        if ((required && !nextValue) || (maxLength && nextValue.length > maxLength)) {
+          markFieldInvalid(fieldKey)
+          return
+        }
+
+        target[key] = nextValue
+        delete vm.ui.invalidFields[fieldKey]
+        delete vm.ui.fieldLocks[fieldKey]
+        if (vm.ui.activeFieldKey === fieldKey) {
+          vm.ui.activeFieldKey = ''
+        }
+        vm.ui.fieldDrafts[fieldKey] = nextValue
+        vm.persistConfig()
+      }
+
+      function commitNumberField(fieldKey, target, key, options) {
+        var rawValue
+        var trimmedValue
+        var numericValue
+        var minValue
+        var maxValue
+
+        if (!fieldKey || !target || !key) {
+          return
+        }
+
+        rawValue = normalizeFieldDraftValue(vm.ui.fieldDrafts[fieldKey])
+        trimmedValue = rawValue.trim()
+        minValue = Number(resolveValidationOption(options && options.min, target, key))
+        maxValue = Number(resolveValidationOption(options && options.max, target, key))
+
+        if (!trimmedValue) {
+          markFieldInvalid(fieldKey)
+          return
+        }
+
+        numericValue = Number(trimmedValue)
+        if (!isFinite(numericValue)) {
+          markFieldInvalid(fieldKey)
+          return
+        }
+
+        if (options && options.integer && Math.round(numericValue) !== numericValue) {
+          markFieldInvalid(fieldKey)
+          return
+        }
+
+        if (isFinite(minValue) && numericValue < minValue) {
+          markFieldInvalid(fieldKey)
+          return
+        }
+
+        if (isFinite(maxValue) && numericValue > maxValue) {
+          markFieldInvalid(fieldKey)
+          return
+        }
+
+        if (options && options.integer) {
+          numericValue = Math.round(numericValue)
+        }
+
+        target[key] = numericValue
+        delete vm.ui.invalidFields[fieldKey]
+        delete vm.ui.fieldLocks[fieldKey]
+        if (vm.ui.activeFieldKey === fieldKey) {
+          vm.ui.activeFieldKey = ''
+        }
+        vm.ui.fieldDrafts[fieldKey] = String(numericValue)
+        vm.persistConfig()
+      }
+
+      function revertFieldDraft(fieldKey, fallbackValue) {
+        if (!fieldKey) {
+          return
+        }
+
+        vm.ui.fieldDrafts[fieldKey] = normalizeFieldDraftValue(fallbackValue)
+        delete vm.ui.invalidFields[fieldKey]
+        delete vm.ui.fieldLocks[fieldKey]
+        if (vm.ui.activeFieldKey === fieldKey) {
+          vm.ui.activeFieldKey = ''
+        }
+      }
+
       function invokeAction(expression) {
         vm.loading = true
         bngApi.engineLua(
@@ -495,6 +834,7 @@ angular.module('beamng.apps').directive('raceDirectorConfig', ['$interval', func
           vehicles: angular.isArray(payload.vehicles) ? payload.vehicles : [],
           options: payload.options || buildDefaultOptions()
         }
+        syncAllFieldDrafts()
       }
 
       function finishRefresh(applyStateCallback) {

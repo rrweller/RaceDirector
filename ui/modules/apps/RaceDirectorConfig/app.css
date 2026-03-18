@@ -311,8 +311,8 @@
 }
 
 .race-director-config .field-block.is-choice {
-  flex: 0 1 250px;
-  min-width: 250px;
+  flex: 0 1 236px;
+  min-width: 236px;
   max-width: 320px;
 }
 
@@ -422,9 +422,9 @@
 
 .race-director-config .field-block.is-narrow .number-input,
 .race-director-config .field-block.is-narrow .text-input {
-  width: 124px;
-  min-width: 124px;
-  max-width: 124px;
+  width: 112px;
+  min-width: 112px;
+  max-width: 112px;
 }
 
 .race-director-config .text-input:focus,
@@ -435,6 +435,24 @@
   border-color: rgba(var(--rdc-accent-rgb), 0.42);
   background: rgba(255, 255, 255, 0.07);
   box-shadow: 0 0 0 1px rgba(var(--rdc-accent-rgb), 0.16);
+}
+
+.race-director-config .text-input.is-invalid,
+.race-director-config .number-input.is-invalid,
+.race-director-config .entry-name-input.is-invalid,
+.race-director-config .stepper-input.is-invalid {
+  border-color: rgba(var(--rdc-danger-rgb), 0.62);
+  background: rgba(var(--rdc-danger-rgb), 0.12);
+  box-shadow: 0 0 0 1px rgba(var(--rdc-danger-rgb), 0.16);
+}
+
+.race-director-config .text-input.is-invalid:focus,
+.race-director-config .number-input.is-invalid:focus,
+.race-director-config .entry-name-input.is-invalid:focus,
+.race-director-config .stepper-input.is-invalid:focus {
+  border-color: rgba(var(--rdc-danger-rgb), 0.74);
+  background: rgba(var(--rdc-danger-rgb), 0.15);
+  box-shadow: 0 0 0 1px rgba(var(--rdc-danger-rgb), 0.22);
 }
 
 .race-director-config .entry-card {
